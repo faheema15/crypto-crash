@@ -151,7 +151,3 @@ The game uses a cryptographically secure algorithm to determine crash points:
 2. This combination is hashed to generate a deterministic but unpredictable value.
 3. The hash is converted to a crash point using a formula that ensures fair distribution.
 4. Players can verify that the crash point was not manipulated after the game.
-
-## License
-
-MIT
