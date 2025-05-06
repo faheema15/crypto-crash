@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Crash Game - WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a2e;
+            color: #e6e6e6;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .game-panel, .controls-panel, .log-panel {
+            background-color: #16213e;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .game-display {
+            background-color: #0f3460;
+            height: 200px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .multiplier {
+            font-size: 72px;
+            font-weight: bold;
+            color: #e94560;
+            text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+        }
+        .status {
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+        .crash-animation {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(233, 69, 96, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: bold;
+            color: white;
+            animation: flash 0.5s ease-in-out;
+        }
+        @keyframes flash {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            background-color: #2a2a40;
+            color: #e6e6e6;
+            font-size: 16px;
+        }
+        button {
+            background-color: #e94560;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #d63e57;
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        .log {
+            height: 400px;
+            overflow-y: auto;
+            background-color: #0d1b2a;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .log div {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .log .info {
+            background-color: #1e2f4a;
+        }
+        .log .error {
+            background-color: rgba(233, 69, 96, 0.3);
+        }
+        .log .success {
+            background-color: rgba(39, 174, 96, 0.3);
+        }
+        .bet-list, .cashout-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .bet-item, .cashout-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            background-color: #0d1b2a;
+        }
+        h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .game-history {
+            margin-top: 20px;
+        }
+        .history-item {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .high {
+            background-color: #27ae60;
+        }
+        .medium {
+            background-color: #f39c12;
+        }
+        .low {
+            background-color: #e94560;
+        }
+    </style>
+</head>
+<body>
+    <h1>Crypto Crash Game - WebSocket Test Client</h1>
+    
+    <div class="container">
+        <div class="left-column">
+            <div class="game-panel">
+                <h2>Game Display</h2>
+                <div class="game-display" id="gameDisplay">
+                    <div class="multiplier" id="multiplier">1.00x</div>
+                    <div class="status" id="status">Waiting for next round...</div>
+                </div>
+                <div class="game-history" id="gameHistory">
+                    <h3>Game History</h3>
+                    <div id="historyList"></div>
+                </div>
+            </div>
+            
+            <div class="controls-panel">
+                <h2>Player Controls</h2>
+                <div class="form-group">
+                    <label for="playerId">Player ID:</label>
+                    <input type="text" id="playerId" placeholder="Enter your player ID">
+                </div>
+                <div class="form-group">
+                    <label for="betAmount">Bet Amount (USD):</label>
+                    <input type="number" id="betAmount" min="1" step="0.01" value="10">
+                </div>
+                <div class="form-group">
+                    <label for="cryptoCurrency">Cryptocurrency:</label>
+                    <select id="cryptoCurrency">
+                        <option value="BTC">Bitcoin (BTC)</option>
+                        <option value="ETH">Ethereum (ETH)</option>
+                    </select>
+                </div>
+                <button id="placeBetBtn">Place Bet</button>
+                <button id="cashoutBtn" disabled>Cash Out</button>
+            </div>
+        </div>
+        
+        <div class="right-column">
+            <div class="log-panel">
+                <h2>Game Log</h2>
+                <div class="log" id="gameLog"></div>
+            </div>
+            
+            <div class="log-panel">
+                <h2>Active Bets</h2>
+                <div class="bet-list" id="betList"></div>
+            </div>
+            
+            <div class="log-panel">
+                <h2>Recent Cashouts</h2>
+                <div class="cashout-list" id="cashoutList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        let socket;
+        let connected = false;
+        let currentPlayerId = '';
+        let hasBetInCurrentRound = false;
+        let gameHistory = [];
+        let gameState = {
+            status: 'WAITING',
+            multiplier: 1.00,
+            roundId: null
+        };
+
+        // DOM Elements
+        const multiplierEl = document.getElementById('multiplier');
+        const statusEl = document.getElementById('status');
+        const gameLogEl = document.getElementById('gameLog');
+        const betListEl = document.getElementById('betList');
+        const cashoutListEl = document.getElementById('cashoutList');
+        const historyListEl = document.getElementById('historyList');
+        const gameDisplayEl = document.getElementById('gameDisplay');
+        
+        // Controls
+        const playerIdInput = document.getElementById('playerId');
+        const betAmountInput = document.getElementById('betAmount');
+        const cryptoCurrencySelect = document.getElementById('cryptoCurrency');
+        const placeBetBtn = document.getElementById('placeBetBtn');
+        const cashoutBtn = document.getElementById('cashoutBtn');
+
+        // Connect to WebSocket server
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            socket = new WebSocket(wsUrl);
+            
+            socket.onopen = () => {
+                connected = true;
+                log('Connected to game server', 'success');
+                
+                // Request current game state
+                socket.send(JSON.stringify({
+                    type: 'GET_GAME_STATE'
+                }));
+            };
+            
+            socket.onclose = () => {
+                connected = false;
+                log('Disconnected from game server', 'error');
+                setTimeout(connectWebSocket, 3000); // Try to reconnect after 3 seconds
+            };
+            
+            socket.onerror = (error) => {
+                log('WebSocket error: ' + error.message, 'error');
+            };
+            
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (error) {
+                    log('Error parsing message: ' + error.message, 'error');
+                }
+            };
+        }
+
+        // Handle WebSocket messages
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'GAME_STATE':
+                    updateGameState(data);
+                    break;
+                case 'ROUND_STARTING':
+                    handleRoundStarting(data);
+                    break;
+                case 'MULTIPLIER_UPDATE':
+                    updateMultiplier(data.multiplier);
+                    break;
+                case 'PLAYER_BET':
+                    handlePlayerBet(data);
+                    break;
+                case 'PLAYER_CASHOUT':
+                    handlePlayerCashout(data);
+                    break;
+                case 'ROUND_CRASHED':
+                    handleRoundCrashed(data);
+                    break;
+                case 'BET_PLACED':
+                    handleBetConfirmation(data);
+                    break;
+                case 'CASHOUT_CONFIRMED':
+                    handleCashoutConfirmation(data);
+                    break;
+                case 'ERROR':
+                    handleError(data);
+                    break;
+                default:
+                    log('Unknown message type: ' + data.type, 'info');
+            }
+        }
+
+        // Update game state
+        function updateGameState(data) {
+            gameState = {
+                status: data.status,
+                multiplier: data.multiplier || 1.00,
+                roundId: data.roundId
+            };
+            
+            updateGameDisplay();
+            
+            if (data.bets && data.bets.length > 0) {
+                betListEl.innerHTML = ''; // Clear bet list
+                data.bets.forEach(bet => {
+                    addBetToList(bet);
+                    if (bet.playerId === currentPlayerId) {
+                        hasBetInCurrentRound = true;
+                        updateCashoutButton();
+                    }
+                });
+            }
+            
+            if (data.history && data.history.length > 0) {
+                gameHistory = data.history;
+                updateGameHistory();
+            }
+            
+            log(`Game state updated: ${data.status}`, 'info');
+        }
+
+        // Handle round starting
+        function handleRoundStarting(data) {
+            gameState.status = 'STARTING';
+            gameState.roundId = data.roundId;
+            gameState.multiplier = 1.00;
+            
+            hasBetInCurrentRound = false;
+            updateCashoutButton();
+            
+            multiplierEl.textContent = '1.00x';
+            statusEl.textContent = `Round ${data.roundId} starting in ${data.startingIn}s...`;
+            
+            betListEl.innerHTML = ''; // Clear bet list
+            cashoutListEl.innerHTML = ''; // Clear cashout list
+            
+            log(`Round ${data.roundId} starting in ${data.startingIn} seconds`, 'info');
+        }
+
+        // Update multiplier
+        function updateMultiplier(multiplier) {
+            gameState.multiplier = multiplier;
+            multiplierEl.textContent = multiplier.toFixed(2) + 'x';
+            
+            if (gameState.status !== 'IN_PROGRESS') {
+                gameState.status = 'IN_PROGRESS';
+                statusEl.textContent = 'Game in progress';
+                log('Game is running!', 'info');
+            }
+            
+            updateCashoutButton();
+        }
+
+        // Handle player bet
+        function handlePlayerBet(data) {
+            addBetToList(data);
+            log(`Player ${data.playerId.substring(0, 6)}... bet ${data.usdAmount} in ${data.cryptoCurrency}`, 'info');
+            
+            if (data.playerId === currentPlayerId) {
+                hasBetInCurrentRound = true;
+                updateCashoutButton();
+            }
+        }
+
+        // Handle player cashout
+        function handlePlayerCashout(data) {
+            addCashoutToList(data);
+            log(`Player ${data.playerId.substring(0, 6)}... cashed out at ${data.multiplier.toFixed(2)}x (${data.usdPayout.toFixed(2)})`, 'success');
+            
+            if (data.playerId === currentPlayerId) {
+                hasBetInCurrentRound = false;
+                updateCashoutButton();
+            }
+        }
+
+        // Handle round crashed
+        function handleRoundCrashed(data) {
+            gameState.status = 'CRASHED';
+            
+            // Create crash animation
+            const crashEl = document.createElement('div');
+            crashEl.className = 'crash-animation';
+            crashEl.textContent = 'CRASHED!';
+            gameDisplayEl.appendChild(crashEl);
+            
+            setTimeout(() => {
+                crashEl.remove();
+            }, 1000);
+            
+            statusEl.textContent = `Crashed at ${data.crashPoint.toFixed(2)}x`;
+            
+            // Add to game history
+            if (gameHistory.length >= 10) {
+                gameHistory.pop();
+            }
+            gameHistory.unshift(data.crashPoint);
+            updateGameHistory();
+            
+            log(`Game crashed at ${data.crashPoint.toFixed(2)}x!`, 'error');
+            
+            // Reset for next round
+            hasBetInCurrentRound = false;
+            updateCashoutButton();
+        }
+
+        // Handle bet confirmation
+        function handleBetConfirmation(data) {
+            if (data.success) {
+                log(`Bet placed successfully: ${data.usdAmount} (${data.cryptoAmount.toFixed(8)} ${data.cryptoCurrency})`, 'success');
+            } else {
+                log(`Failed to place bet: ${data.error}`, 'error');
+            }
+        }
+
+        // Handle cashout confirmation
+        function handleCashoutConfirmation(data) {
+            if (data.success) {
+                log(`Cashed out successfully at ${data.multiplier.toFixed(2)}x: ${data.usdPayout.toFixed(2)} (${data.cryptoPayout.toFixed(8)} ${data.cryptoCurrency})`, 'success');
+            } else {
+                log(`Failed to cash out: ${data.error}`, 'error');
+            }
+        }
+
+        // Handle error
+        function handleError(data) {
+            log(`Error: ${data.message}`, 'error');
+        }
+
+        // Add bet to list
+        function addBetToList(bet) {
+            const betEl = document.createElement('div');
+            betEl.className = 'bet-item';
+            betEl.innerHTML = `
+                <strong>${bet.playerId.substring(0, 6)}...</strong>: 
+                ${bet.usdAmount.toFixed(2)} 
+                (${bet.cryptoAmount.toFixed(8)} ${bet.cryptoCurrency})
+            `;
+            betListEl.appendChild(betEl);
+        }
+
+        // Add cashout to list
+        function addCashoutToList(cashout) {
+            const cashoutEl = document.createElement('div');
+            cashoutEl.className = 'cashout-item';
+            cashoutEl.innerHTML = `
+                <strong>${cashout.playerId.substring(0, 6)}...</strong>: 
+                ${cashout.multiplier.toFixed(2)}x - ${cashout.usdPayout.toFixed(2)} 
+                (${cashout.cryptoPayout.toFixed(8)} ${cashout.cryptoCurrency})
+            `;
+            cashoutListEl.appendChild(cashoutEl);
+        }
+
+        // Update game history display
+        function updateGameHistory() {
+            historyListEl.innerHTML = '';
+            
+            gameHistory.forEach(crashPoint => {
+                const historyEl = document.createElement('div');
+                historyEl.className = 'history-item';
+                
+                if (crashPoint >= 10) {
+                    historyEl.classList.add('high');
+                } else if (crashPoint >= 2) {
+                    historyEl.classList.add('medium');
+                } else {
+                    historyEl.classList.add('low');
+                }
+                
+                historyEl.textContent = crashPoint.toFixed(1);
+                historyListEl.appendChild(historyEl);
+            });
+        }
+
+        // Update game display based on state
+        function updateGameDisplay() {
+            switch (gameState.status) {
+                case 'WAITING':
+                    multiplierEl.textContent = '1.00x';
+                    statusEl.textContent = 'Waiting for next round...';
+                    break;
+                case 'STARTING':
+                    multiplierEl.textContent = '1.00x';
+                    statusEl.textContent = `Round ${gameState.roundId} starting soon...`;
+                    break;
+                case 'IN_PROGRESS':
+                    multiplierEl.textContent = gameState.multiplier.toFixed(2) + 'x';
+                    statusEl.textContent = 'Game in progress';
+                    break;
+                case 'CRASHED':
+                    statusEl.textContent = `Crashed at ${gameState.multiplier.toFixed(2)}x`;
+                    break;
+            }
+        }
+
+        // Update cashout button state
+        function updateCashoutButton() {
+            cashoutBtn.disabled = !hasBetInCurrentRound || gameState.status !== 'IN_PROGRESS';
+        }
+
+        // Add log message
+        function log(message, type = 'info') {
+            const logEl = document.createElement('div');
+            logEl.className = type;
+            logEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            gameLogEl.appendChild(logEl);
+            gameLogEl.scrollTop = gameLogEl.scrollHeight;
+        }
+
+        // Place bet
+        function placeBet() {
+            const playerId = playerIdInput.value.trim();
+            const usdAmount = parseFloat(betAmountInput.value);
+            const cryptoCurrency = cryptoCurrencySelect.value;
+            
+            if (!playerId) {
+                log('Please enter a player ID', 'error');
+                return;
+            }
+            
+            if (isNaN(usdAmount) || usdAmount <= 0) {
+                log('Please enter a valid bet amount', 'error');
+                return;
+            }
+            
+            currentPlayerId = playerId;
+            
+            if (connected && gameState.status === 'WAITING' || gameState.status === 'STARTING') {
+                socket.send(JSON.stringify({
+                    type: 'PLACE_BET',
+                    playerId,
+                    usdAmount,
+                    cryptoCurrency
+                }));
+                
+                log(`Placing bet: ${usdAmount} in ${cryptoCurrency}...`, 'info');
+            } else {
+                log('Cannot place bet now. Wait for the next round to start.', 'error');
+            }
+        }
+
+        // Cash out
+        function cashout() {
+            const playerId = playerIdInput.value.trim();
+            
+            if (!playerId) {
+                log('Please enter a player ID', 'error');
+                return;
+            }
+            
+            if (connected && hasBetInCurrentRound && gameState.status === 'IN_PROGRESS') {
+                socket.send(JSON.stringify({
+                    type: 'CASHOUT',
+                    playerId,
+                    roundId: gameState.roundId
+                }));
+                
+                log(`Attempting to cash out at ${gameState.multiplier.toFixed(2)}x...`, 'info');
+            } else {
+                log('Cannot cash out. No active bet or game not in progress.', 'error');
+            }
+        }
+
+        // Add event listeners
+        placeBetBtn.addEventListener('click', placeBet);
+        cashoutBtn.addEventListener('click', cashout);
+        
+        // Initialize
+        connectWebSocket();
+    </script>
+</body>
+</html>
